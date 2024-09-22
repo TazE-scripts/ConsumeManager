@@ -1,0 +1,69 @@
+{$I WaspLib/osr.simba}
+{$I ./ConsumeManager.simba}
+
+type
+  Estate = (
+    CONSUMABLE_NONE,
+    EAT_FOOD,
+    LOW_HEALTH,
+    DRINK_PRAYER,
+    LOW_PRAYER,
+    ENABLE_PRAYER,
+    DRINK_ANTIFIRE,
+    NO_ANTIFIRE,
+    DRINK_ANTIVENOM,
+    DRINK_ANTIPOISON,
+    DRINK_STRENGTH_BOOST,
+    DRINK_ATTACK_BOOST,
+    DRINK_DEFENCE_BOOST,
+    DRINK_RANGING_BOOST,
+    DRINK_MAGIC_BOOST,
+    DRINK_BOOST
+  );
+
+  TBot = record(TBaseBankScript)
+    State: EState;
+    ConsumeManager: TConsumbleManager;
+  end;
+
+function TConsumbleManager.ConsumeStateToEState(consumeState: EConsumeState): EState;
+begin
+  case consumeState of
+    EConsumeState._CONSUMABLE_NONE: Result := EState.CONSUMABLE_NONE;
+    EConsumeState._EAT_FOOD: Result := EState.EAT_FOOD;
+    EConsumeState._LOW_HEALTH: Result := EState.LOW_HEALTH;
+    EConsumeState._DRINK_PRAYER: Result := EState.DRINK_PRAYER;
+    EConsumeState._LOW_PRAYER: Result := EState.LOW_PRAYER;
+    EConsumeState._ENABLE_PRAYER: Result := EState.ENABLE_PRAYER;
+    EConsumeState._DRINK_ANTIFIRE: Result := EState.DRINK_ANTIFIRE;
+    EConsumeState._NO_ANTIFIRE: Result := EState.NO_ANTIFIRE;
+    EConsumeState._DRINK_ANTIVENOM: Result := EState.DRINK_ANTIVENOM;
+    EConsumeState._DRINK_ANTIPOISON: Result := EState.DRINK_ANTIPOISON;
+    EConsumeState._DRINK_STRENGTH_BOOST: Result := EState.DRINK_STRENGTH_BOOST;
+    EConsumeState._DRINK_ATTACK_BOOST: Result := EState.DRINK_ATTACK_BOOST;
+    EConsumeState._DRINK_DEFENCE_BOOST: Result := EState.DRINK_DEFENCE_BOOST;
+    EConsumeState._DRINK_RANGING_BOOST: Result := EState.DRINK_RANGING_BOOST;
+    EConsumeState._DRINK_MAGIC_BOOST: Result := EState.DRINK_MAGIC_BOOST;
+    EConsumeState._DRINK_BOOST: Result := EState.DRINK_BOOST;
+  else
+    Result := EState.CONSUMABLE_NONE;
+  end;
+end;
+
+function TConsumbleManager.ShouldConsume: EState;
+begin
+  Self.ConsumeState := Self.GetState;
+  if Self.ConsumeState <> EConsumeState._CONSUMABLE_NONE then
+    Result := Self.ConsumeStateToEState(Self.ConsumeState)
+  else
+    Result := EState.CONSUMABLE_NONE;
+end;
+
+
+function TBot.GetState: EState;
+begin
+  Result := Self.ConsumeManager.ShouldConsume;
+  if Result <> EState.CONSUMABLE_NONE then
+    Exit(Result);
+
+end;

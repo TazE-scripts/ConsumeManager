@@ -1,0 +1,152 @@
+{$DEFINE WL_COMBAT_CONSUMABLE_INCLUDED}
+{$IFNDEF WL_OSR}
+  {$I WaspLib/osr.simba}
+{$ENDIF}
+
+type
+  EConsumeState = (
+    _CONSUMABLE_NONE,
+    _EAT_FOOD,
+    _LOW_HEALTH,
+    _DRINK_PRAYER,
+    _LOW_PRAYER,
+    _ENABLE_PRAYER,
+    _DRINK_ANTIFIRE,
+    _NO_ANTIFIRE,
+    _DRINK_ANTIVENOM,
+    _DRINK_ANTIPOISON,
+    _DRINK_STRENGTH_BOOST,
+    _DRINK_ATTACK_BOOST,
+    _DRINK_DEFENCE_BOOST,
+    _DRINK_RANGING_BOOST,
+    _DRINK_MAGIC_BOOST,
+    _DRINK_BOOST
+  );
+
+  TConsumbleManager = record(TSRLBaseRecord)
+    ActiveConsumables: array [ERSConsumable] of Boolean;
+    ConsumeState: EConsumeState;
+    MinHitPoints, MinPrayPoints: Int32;
+    IsSetup: Boolean;
+  end;
+
+procedure TConsumbleManager.Setup(minHP, minPrayer: Int32);
+var
+  eConsumable: ERSConsumable;
+begin
+  if Self.IsSetup then
+    Exit;
+
+  Self.Name := 'ConsumableManager';
+  Self.MinHitPoints := minHP;
+  Self.MinPrayPoints := minPrayer;
+
+  for eConsumable := ERSConsumable(0) to ERSConsumable(High(ERSConsumable)) do
+    Self._SetupConsumable(eConsumable);
+
+  Self.IsSetup := True;
+end;
+
+procedure TConsumbleManager._SetupConsumable(consumable: ERSConsumable);
+begin
+  Self.ActiveConsumables[consumable] := Inventory.ContainsAny(CONSUMABLE_ARRAYS[consumable]);
+
+  if Self.ActiveConsumables[consumable] then
+  begin
+    Self.DebugLn(ToStr(consumable) + ' detected, it will be used.');
+    CONSUMABLE_HANDLER_ARRAY[consumable]^.MinInvPoints := 1;
+    CONSUMABLE_HANDLER_ARRAY[consumable]^.Setup(consumable);
+  end;
+end;
+
+function TConsumbleManager.NeedsConsumable(consumable: ERSConsumable): Boolean;
+begin
+  Result := Self.ActiveConsumables[consumable] and CONSUMABLE_HANDLER_ARRAY[consumable]^.NeedToConsume();
+end;
+
+function TConsumbleManager.NeedsAntiPoison(): Boolean;
+begin
+  if not Self.ActiveConsumables[ERSConsumable.POISON] and
+     not Self.ActiveConsumables[ERSConsumable.VENOM] then
+    Exit(False);
+
+  Result := PoisonHandler.NeedToConsume() or VenomHandler.NeedToConsume() or
+            Minimap.IsPoisoned() or Minimap.IsEnvenomed();
+end;
+
+function TConsumbleManager.Consume(consumable: ERSConsumable): Boolean;
+begin
+  Result := Inventory.Consume(consumable);
+
+  if Result or Inventory.ContainsConsumable(consumable) then
+    Exit;
+
+  Self.ActiveConsumables[consumable] := False;
+end;
+
+
+function TConsumbleManager.GetState(): EConsumeState;
+var
+  pray: Int32;
+begin
+  if Minimap.GetHPLevel() <= Self.MinHitPoints then
+  begin
+    if Self.ActiveConsumables[ERSConsumable.FOOD] then
+      Exit(EConsumeState._EAT_FOOD);
+
+    Exit(EConsumeState._LOW_HEALTH);
+  end;
+
+  if Self.ActiveConsumables[ERSConsumable.PRAYER] then
+  begin
+    pray := Minimap.GetPrayerLevel();
+
+    if (pray > 0) and not Minimap.IsPrayerEnabled() then
+      Exit(EConsumeState._ENABLE_PRAYER);
+
+    if (pray <= Self.MinPrayPoints) then
+    begin
+      if Inventory.ContainsConsumable(ERSConsumable.PRAYER) then
+        Exit(EConsumeState._DRINK_PRAYER);
+
+      Exit(EConsumeState._LOW_PRAYER);
+    end;
+  end;
+
+  if Self.NeedsConsumable(ERSConsumable.ANTI_FIRE) then
+  begin
+    if Inventory.ContainsConsumable(ERSConsumable.ANTI_FIRE) then
+      Exit(EConsumeState._DRINK_ANTIFIRE);
+
+    Exit(EConsumeState._NO_ANTIFIRE);
+  end;
+
+  if Self.NeedsAntiPoison() then
+  begin
+    if Self.ActiveConsumables[ERSConsumable.VENOM] and Inventory.ContainsConsumable(ERSConsumable.VENOM) then
+      Exit(EConsumeState._DRINK_ANTIVENOM);
+
+    if Self.ActiveConsumables[ERSConsumable.POISON] and Inventory.ContainsConsumable(ERSConsumable.POISON) then
+      Exit(EConsumeState._DRINK_ANTIPOISON);
+  end;
+
+  if Self.NeedsConsumable(ERSConsumable.STRENGTH_BOOST) then
+    Exit(EConsumeState._DRINK_STRENGTH_BOOST);
+
+  if Self.NeedsConsumable(ERSConsumable.ATTACK_BOOST) then
+    Exit(EConsumeState._DRINK_ATTACK_BOOST);
+
+  if Self.NeedsConsumable(ERSConsumable.DEFENCE_BOOST) then
+    Exit(EConsumeState._DRINK_DEFENCE_BOOST);
+
+  if Self.NeedsConsumable(ERSConsumable.RANGING_BOOST) then
+    Exit(EConsumeState._DRINK_RANGING_BOOST);
+
+  if Self.NeedsConsumable(ERSConsumable.MAGIC_BOOST) then
+    Exit(EConsumeState._DRINK_MAGIC_BOOST);
+
+  if Self.NeedsConsumable(ERSConsumable.BOOST) then
+    Exit(EConsumeState._DRINK_BOOST);
+
+  Result := EConsumeState._CONSUMABLE_NONE;
+end;
